@@ -1,26 +1,154 @@
 import React, { Component } from "react";
 import { connect } from "react-redux";
-import { addServerResponse, addImageMessage } from "../app/store";
+import { motion, AnimatePresence } from "framer-motion";
+
+import {
+  addServerResponse,
+  addImageMessage,
+  setMainImage,
+} from "../app/store";
+
 import { translations } from "../app/locales";
 import ActionPromptCard from "./ActionPromptCard";
 import ImageModal from "./ImageModal";
-import CircularProgress from "@mui/material/CircularProgress";
+import LoadingIndicator from "./LoadingIndicator";
+
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 
 import "../index.css";
+import BgGif from "../assets/Bg.gif";
 
 class Workspace extends Component {
   constructor(props) {
     super(props);
-
     this.feedEndRef = React.createRef();
+    this.socket = null;
 
     this.state = {
       modalImage: null,
       isProcessing: false,
+      contextMenu: null,
+      selectedImage: null,
+      visible: true,
+      lastScrollY: 0,
     };
+
+    this.pendingResolve = null;
+    this.pendingReject = null;
   }
+
+  componentDidMount() {
+    this.connectWebSocket();
+    window.addEventListener("scroll", this.handleScroll);
+  }
+
+  componentWillUnmount() {
+    if (this.socket) this.socket.close();
+    window.removeEventListener("scroll", this.handleScroll);
+  }
+
+  connectWebSocket = () => {
+    this.socket = new WebSocket("ws://127.0.0.1:8000/ws/filter/");
+
+    this.socket.onopen = () => {
+      console.log("✅ WebSocket connected to Image Filter Service");
+    };
+
+    this.socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      this.setState({ isProcessing: false });
+
+      if (data.status === "success") {
+        if (this.pendingResolve) {
+          this.pendingResolve(data.image);
+          this.pendingResolve = null;
+          this.pendingReject = null;
+        } else {
+          this.props.addServerResponse({
+            content: data.image,
+            isResponse: true,
+          });
+        }
+      } else {
+        this.props.addServerResponse({
+          type: "error",
+          content: data.message || "Processing failed",
+        });
+
+        if (this.pendingReject) {
+          this.pendingReject(new Error(data.message));
+          this.pendingReject = null;
+        }
+      }
+    };
+
+    this.socket.onerror = (err) => {
+      console.error("WebSocket Error:", err);
+      this.setState({ isProcessing: false });
+      if (this.pendingReject) this.pendingReject(err);
+    };
+
+    this.socket.onclose = () => console.log("WebSocket connection closed");
+  };
+
+  // New: Handle final apply (add to chat + set as main)
+  handleFinalApply = (resultImage) => {
+    if (!resultImage) return;
+
+    // Add to chat feed
+    this.props.addServerResponse({
+      content: resultImage,
+      isResponse: true,
+    });
+
+    // Set as Latest Main
+    this.props.setMainImage(resultImage);
+  };
+
+  // Main handler for both preview and final
+  handleExecuteAlgorithm = (algorithm, params, isPreview = true) => {
+    return new Promise((resolve, reject) => {
+      const { mainImage } = this.props;
+      const imageData = this.normalizeImage(mainImage);
+
+      if (!imageData) {
+        reject(new Error("No main image available"));
+        return;
+      }
+
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        reject(new Error("WebSocket is not connected"));
+        return;
+      }
+
+      this.setState({ isProcessing: true });
+
+      this.pendingResolve = resolve;
+      this.pendingReject = reject;
+
+      try {
+        const payload = {
+          algorithm: algorithm,
+          params: {
+            size: params.kernelSize,
+            sigma: params.sigma,
+            A: params.boostFactor,
+            mask: params.laplacianMask,
+          },
+          image: imageData,
+        };
+
+        this.socket.send(JSON.stringify(payload));
+      } catch (err) {
+        console.error("Error sending WebSocket message:", err);
+        this.setState({ isProcessing: false });
+        reject(err);
+      }
+    });
+  };
 
   componentDidUpdate(prevProps, prevState) {
     if (
@@ -30,6 +158,19 @@ class Workspace extends Component {
       this.scrollToBottom();
     }
   }
+
+  handleScroll = () => {
+    const currentScrollY = window.scrollY;
+    const { lastScrollY, visible } = this.state;
+
+    if (currentScrollY > lastScrollY && currentScrollY > 120) {
+      if (visible) this.setState({ visible: false });
+    } else {
+      if (!visible) this.setState({ visible: true });
+    }
+
+    this.setState({ lastScrollY: currentScrollY });
+  };
 
   scrollToBottom = () => {
     if (this.feedEndRef.current) {
@@ -44,118 +185,65 @@ class Workspace extends Component {
     return null;
   };
 
-  base64ToBlob = (base64Str) => {
-    if (typeof base64Str !== "string") return null;
-    if (!base64Str.includes("base64,")) return null;
-
-    try {
-      const parts = base64Str.split("base64,");
-      const mimeMatch = base64Str.match(/data:(.*?);base64,/);
-
-      if (!mimeMatch) return null;
-
-      const contentType = mimeMatch[1];
-      const raw = window.atob(parts[1]);
-
-      const arr = new Uint8Array(raw.length);
-
-      for (let i = 0; i < raw.length; i++) {
-        arr[i] = raw.charCodeAt(i);
-      }
-
-      return new Blob([arr], { type: contentType });
-    } catch (e) {
-      console.error("Base64 decode error:", e);
-      return null;
-    }
+  handleContextMenu = (event, image) => {
+    event.preventDefault();
+    this.setState({
+      contextMenu: {
+        mouseX: event.clientX + 2,
+        mouseY: event.clientY - 6,
+      },
+      selectedImage: image,
+    });
   };
 
-  handleExecuteAlgorithm = async (algorithm, param) => {
-    const { mainImage, addServerResponse } = this.props;
+  handleCloseMenu = () => {
+    this.setState({ contextMenu: null, selectedImage: null });
+  };
 
-    const imageData = this.normalizeImage(mainImage);
-    if (!imageData) return;
-
-    const blob = this.base64ToBlob(imageData);
-    if (!blob) {
-      console.error("Invalid image format");
-      return;
-    }
-
-    this.setState({ isProcessing: true });
-
-    try {
-      const formData = new FormData();
-      formData.append("image", blob, "source.png");
-
-      let url = `http://127.0.0.1:8000/api/filter/${algorithm}/`;
-
-      if (algorithm === "highboost") {
-        url += `?A=${param}`;
-      } else {
-        url += `?size=${param}`;
-      }
-
-      const response = await fetch(url, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) throw new Error("Server error");
-
-      const outputBlob = await response.blob();
-      const reader = new FileReader();
-
-      reader.onloadend = () => {
-        this.setState({ isProcessing: false });
-        addServerResponse({
-          id: Date.now(),
-          type: "image",
-          content: reader.result,
-          isResponse: true,
-        });
-      };
-
-      reader.readAsDataURL(outputBlob);
-    } catch (err) {
-      console.error(err);
-      
-      this.setState({ isProcessing: false });
-      addServerResponse({
-        id: Date.now(),
-        type: "error",
-        content: "ENGINE ERROR",
-        isResponse: true,
-      });
-    }
+  handleSetMainImage = () => {
+    this.props.setMainImage(this.state.selectedImage);
+    this.setState({ contextMenu: null, selectedImage: null });
   };
 
   renderMessage = (msg) => {
     const { mainImage, language } = this.props;
     const t = translations[language] || translations.en;
 
-    if (!msg) return null;
-
-    if (msg.type === "loading" || msg.type === "pending") return null;
+    if (!msg || msg.type === "loading" || msg.type === "pending") return null;
 
     if (msg.type === "action_prompt") {
       return (
-        <div key={msg.id} className="chat-bubble-wrapper prompt-bubble">
-          <ActionPromptCard onExecute={this.handleExecuteAlgorithm} />
-        </div>
+        <motion.div
+          key={msg.id}
+          className="chat-bubble-wrapper prompt-bubble"
+          initial={{ opacity: 0, y: 80, scale: 0.85 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -50 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <ActionPromptCard 
+            onExecute={this.handleExecuteAlgorithm}
+            onFinalApply={this.handleFinalApply}
+          />
+        </motion.div>
       );
     }
 
     if (msg.type === "error") {
       return (
-        <div key={msg.id} className="chat-bubble-wrapper server-response error-bubble">
-          {/* Subtle clean red indicator bar left side instead of an icon */}
-          <Box sx={{ display: 'flex', alignItems: 'center', paddingLeft: '8px', borderLeft: '3px solid #ef5350' }}>
-            <div className="chat-status-text" style={{ color: '#ef5350', fontWeight: 'bold' }}>
+        <motion.div
+          key={msg.id}
+          className="chat-bubble-wrapper server-response error-bubble"
+          initial={{ opacity: 0, x: -50 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", paddingLeft: "8px", borderLeft: "3px solid #ef5350" }}>
+            <div className="chat-status-text" style={{ color: "#ef5350", fontWeight: "bold" }}>
               {msg.content}
             </div>
           </Box>
-        </div>
+        </motion.div>
       );
     }
 
@@ -166,77 +254,102 @@ class Workspace extends Component {
     const isLatestMain = msg.type === "image" && content === mainImg;
 
     return (
-      <div key={msg.id} className="chat-bubble-wrapper">
-        <div className="chat-image-frame">
+      <motion.div
+        key={msg.id}
+        className="chat-bubble-wrapper"
+        initial={{ opacity: 0, y: 100, scale: 0.88, rotateX: 15 }}
+        animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
+        exit={{ opacity: 0, y: -80, scale: 0.9 }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        layout
+        whileHover={{ scale: 1.015 }}
+      >
+        <motion.div className="chat-image-frame" whileHover={{ scale: 1.025 }} transition={{ duration: 0.3 }}>
           {isLatestMain && (
-            <div className="latest-main-label">Latest Main</div>
+            <motion.div 
+              className="latest-main-label"
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              Latest Main
+            </motion.div>
           )}
 
-          <img
+          <motion.img
             src={content}
             alt="workspace"
             className="chat-preview-img"
             onClick={() => this.setState({ modalImage: content })}
+            onContextMenu={(e) => this.handleContextMenu(e, content)}
+            whileHover={{ scale: 1.04, filter: "brightness(1.12) saturate(1.15)" }}
+            whileTap={{ scale: 0.96 }}
+            transition={{ duration: 0.25 }}
           />
-        </div>
+        </motion.div>
 
-        {/* Minimalist, professional text layouts with zero junk icons or emojis */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-          {msg.isResponse ? (
-            <Typography sx={{ color: '#90caf9', fontSize: '0.75rem', letterSpacing: 0.5, fontWeight: 600 }}>
-              SUCCESS // COMPLETED
-            </Typography>
-          ) : (
-            <Typography sx={{ color: '#aaaaaa', fontSize: '0.75rem', letterSpacing: 0.5 }}>
-              {t.uploadSuccess}
-            </Typography>
-          )}
-        </Box>
-      </div>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", mt: 0.5 }}>
+            {msg.isResponse ? (
+              <Typography sx={{ color: "#90caf9", fontSize: "0.75rem", letterSpacing: 0.5, fontWeight: 600 }}>
+                SUCCESS // COMPLETED
+              </Typography>
+            ) : (
+              <Typography sx={{ color: "#aaaaaa", fontSize: "0.75rem", letterSpacing: 0.5 }}>
+                {t.uploadSuccess}
+              </Typography>
+            )}
+          </Box>
+        </motion.div>
+      </motion.div>
     );
   };
 
   render() {
     const { messages, language } = this.props;
-    const { isProcessing, modalImage } = this.state;
+    const { isProcessing, modalImage, contextMenu, visible } = this.state;
 
     return (
-      <div className={`workspace ${language === "fa" ? "rtl" : ""}`}>
+      <div 
+        className={`workspace ${language === "fa" ? "rtl" : ""}`}
+        style={{
+          backgroundImage: `url(${BgGif})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          backgroundAttachment: "fixed",
+        }}
+      >
         <ImageModal
           src={modalImage}
           onClose={() => this.setState({ modalImage: null })}
         />
 
-        <div className="chat-feed-container">
-          {messages.map(this.renderMessage)}
-          
-          {/* Modern monochrome loader container using only default MUI base elements */}
-          {isProcessing && (
-            <div className="chat-bubble-wrapper server-response">
-              <Box 
-                className="chat-loading-card" 
-                sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 1.5, 
-                  padding: '12px 20px', 
-                  background: '#1a1a1a', 
-                  borderRadius: '8px',
-                  border: '1px solid #333',
-                  width: 'fit-content',
-                  marginTop: '10px'
-                }}
-              >
-                <CircularProgress size={16} sx={{ color: "#e0e0e0" }} />
-                <Typography sx={{ color: "#e0e0e0", fontSize: '0.82rem', letterSpacing: 1, fontWeight: 500 }}>
-                  PROCESSING IMAGE SEQUENCE...
-                </Typography>
-              </Box>
-            </div>
-          )}
-          
+        <Menu
+          open={contextMenu !== null}
+          onClose={this.handleCloseMenu}
+          anchorReference="anchorPosition"
+          anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
+        >
+          <MenuItem onClick={this.handleSetMainImage}>Set as Latest Main</MenuItem>
+        </Menu>
+
+        <motion.div
+          className="chat-feed-container"
+          animate={{ 
+            opacity: visible ? 1 : 0.35,
+            y: visible ? 0 : -30 
+          }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+        >
+          <AnimatePresence>
+            {messages.map(this.renderMessage)}
+          </AnimatePresence>
+
+          {isProcessing && <LoadingIndicator />}
+
           <div ref={this.feedEndRef} />
-        </div>
+        </motion.div>
       </div>
     );
   }
@@ -251,4 +364,5 @@ const mapStateToProps = (state) => ({
 export default connect(mapStateToProps, {
   addServerResponse,
   addImageMessage,
+  setMainImage,
 })(Workspace);

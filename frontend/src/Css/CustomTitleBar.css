@@ -1,0 +1,170 @@
+.custom-title-bar {
+    height: 32px;
+    background: rgba(45, 45, 45, 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    z-index: 2 !important;
+    justify-content: space-between;
+    padding: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    -webkit-app-region: drag;
+    user-select: none;
+    font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+.title-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 12px;
+    -webkit-app-region: drag;
+}
+
+.app-icon {
+    width: 16px;
+    height: 16px;
+    background: #0078d4;
+    /* Replace with your app icon */
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.title-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9) !important;
+    letter-spacing: 0.2px;
+    -webkit-app-region: drag;
+}
+
+/* Window Controls */
+.window-controls {
+    display: flex;
+    height: 100%;
+    -webkit-app-region: no-drag;
+}
+
+.control-btn {
+    width: 46px !important;
+    height: 32px !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: rgba(255, 255, 255, 0.85);
+    transition: all 0.08s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.control-btn:hover {
+    color: #ffffff;
+}
+
+/* Minimize & Maximize Hover */
+.minimize-btn:hover,
+.maximize-btn:hover {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Close Button - Iconic Red */
+.close-btn:hover {
+    background-color: #e81123 !important;
+    color: #ffffff !important;
+}
+
+/* Pressed State */
+.control-btn:active {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+    transform: scale(0.92);
+}
+
+.close-btn:active {
+    background-color: #f1707a !important;
+}
+
+/* Focus for accessibility */
+.control-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.6);
+    outline-offset: -3px;
+}
+
+/* Icon sizes */
+.control-btn svg {
+    font-size: 18px;
+}
+
+
+
+
+.title-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 12px;
+    -webkit-app-region: drag;
+}
+
+.app-icon {
+    width: 16px;
+    height: 16px;
+    background: #0078d4;
+    border-radius: 3px;
+}
+
+.title-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: #ffffff;
+    /* Pure white */
+    letter-spacing: 0.2px;
+    -webkit-app-region: drag;
+    opacity: 0.95;
+}
+
+/* ==================== CONTROLS ==================== */
+.window-controls {
+    display: flex;
+    height: 100%;
+    -webkit-app-region: no-drag;
+}
+
+.control-btn {
+    width: 46px !important;
+    height: 32px !important;
+    border-radius: 0 !important;
+    color: #ffffff !important;
+    /* Force white icons */
+    transition: all 0.1s ease;
+}
+
+.control-btn svg {
+    font-size: 18px;
+    filter: brightness(1.1);
+    /* Extra pop */
+}
+
+/* Hover States */
+.minimize-btn:hover,
+.maximize-btn:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.close-btn:hover {
+    background-color: #e81123 !important;
+    color: #ffffff !important;
+}
+
+/* Pressed */
+.control-btn:active {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.close-btn:active {
+    background-color: #f1707a !important;
+}
+
+/* Focus */
+.control-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.7);
+    outline-offset: -3px;
+}

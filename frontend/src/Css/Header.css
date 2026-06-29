@@ -1,0 +1,210 @@
+/* ===== Force override of global header styles ===== */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 10px 20px;
+  /* fully transparent background with blur */
+  background: rgba(255, 255, 255, 0.15) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+  transition: background 0.3s, border-color 0.3s;
+  /* Override any background from index.css */
+  background-color: transparent !important;
+}
+
+/* Dark mode – deeper glass */
+.header.dark {
+    background: rgb(79 79 79 / 26%) !important;
+    backdrop-filter: blur(66px) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Light mode */
+.header.light {
+  background: rgba(255, 255, 255, 0.5) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* ===== Top row ===== */
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+
+.project-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.project-icon {
+  color: var(--text-primary, #1a1a2e);
+  font-size: 24px;
+}
+
+.header.dark .project-icon {
+  color: #f0f0f0;
+}
+
+.project-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary, #1a1a2e);
+  letter-spacing: -0.02em;
+}
+
+.header.dark .project-title {
+  color: #f0f0f0;
+}
+
+/* ===== Toggle buttons – transparent, only border ===== */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-btn.toggle-btn {
+  background: transparent !important;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  border-radius: 30px;
+  padding: 4px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #555);
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.header.dark .header-btn.toggle-btn {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #c0c0d0;
+}
+
+.header-btn.toggle-btn:hover {
+  border-color: var(--accent, #6c63ff);
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* ===== Ribbon – buttons with no background, separated by gray borders ===== */
+.header-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 0; /* no gap, we use borders */
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+.ribbon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 0;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: transparent !important;
+  color: var(--text-primary, #1a1a2e);
+  /* Add a right border as a separator */
+  border-right: 1px solid rgba(128, 128, 128, 0.3);
+}
+
+.header.dark .ribbon-btn {
+  color: #f0f0f0;
+  border-right-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Remove border from last button */
+.ribbon-btn:last-child {
+  border-right: none;
+}
+
+.ribbon-btn:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  font-weight: 700;
+}
+
+.ribbon-btn:active {
+  transform: scale(0.96);
+}
+
+.ribbon-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  filter: grayscale(0.3);
+}
+
+/* Optional: subtle accent color for the Action button on hover */
+.ribbon-btn.accent:hover {
+  color: #6c63ff;
+}
+.ribbon-btn.primary:hover {
+  color: #4a6cf7;
+}
+.ribbon-btn.danger:hover {
+  color: #f05454;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .header {
+    padding: 8px 12px;
+  }
+  .header-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+  .project-title {
+    font-size: 18px;
+  }
+  .header-actions {
+    justify-content: flex-start;
+  }
+  .header-btn.toggle-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+  .header-ribbon {
+    gap: 0;
+    justify-content: stretch;
+    border-top: 1px solid rgba(128, 128, 128, 0.2);
+  }
+  .ribbon-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 8px 8px;
+    font-size: 13px;
+    border-right: 1px solid rgba(128, 128, 128, 0.2);
+  }
+  .ribbon-btn:last-child {
+    border-right: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .ribbon-btn span {
+    display: none;
+  }
+  .ribbon-btn {
+    min-width: 44px;
+    padding: 8px;
+  }
+}

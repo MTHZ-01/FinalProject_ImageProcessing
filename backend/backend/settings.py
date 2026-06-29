@@ -40,8 +40,9 @@ INSTALLED_APPS = [
 
     "rest_framework",
     "corsheaders",
+    'channels',
+    'api',          # your app
 
-    "api",
 ]
 
 MIDDLEWARE = [
@@ -55,6 +56,27 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Channels Configuration
+ASGI_APPLICATION = 'backend.asgi.application'
+
+
+# For development (in-memory)
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
+
+# For production later (Redis)
+# CHANNEL_LAYERS = {
+#     'default': {
+#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
+#         'CONFIG': {
+#             "hosts": [('127.0.0.1', 6379)],
+#         },
+#     },
+# }
 
 ROOT_URLCONF = 'backend.urls'
 

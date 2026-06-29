@@ -1,0 +1,75 @@
+/* ===== Modal overlay – enter / exit ===== */
+.img-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+
+  /* Transition properties */
+  transition: opacity 400ms cubic-bezier(0.22, 1, 0.36, 1),
+              backdrop-filter 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Default (hidden) state */
+.modal-enter .img-modal-overlay {
+  opacity: 0;
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+}
+
+/* Enter active state */
+.modal-enter-active .img-modal-overlay {
+  opacity: 1;
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+}
+
+/* Exit active state */
+.modal-exit-active .img-modal-overlay {
+  opacity: 0;
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+}
+
+/* ===== Modal content – scale + opacity ===== */
+.img-modal-content {
+  max-width: 90vw;
+  max-height: 90vh;
+  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.img-modal-content img {
+  width: 100%;
+  height: auto;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+}
+
+/* Default (hidden) state */
+.modal-enter .img-modal-content {
+  transform: scale(0.92);
+  opacity: 0;
+}
+
+/* Enter active state */
+.modal-enter-active .img-modal-content {
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* Exit active state */
+.modal-exit-active .img-modal-content {
+  transform: scale(0.96);
+  opacity: 0;
+}

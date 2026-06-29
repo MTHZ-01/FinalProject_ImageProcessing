@@ -1,7 +1,9 @@
 import React, { Component } from "react";
 import { connect } from "react-redux";
+
+import CustomTitleBar from "./components/CustomTitleBar";   // Make sure path is correct
 import Header from "./components/Header";
-import Workspace from "./components/Workspace"; // Import custom view
+import Workspace from "./components/Workspace";
 
 class App extends Component {
   componentDidMount() {
@@ -17,8 +19,12 @@ class App extends Component {
   render() {
     return (
       <div className="app">
-        <Header />
-        <Workspace /> 
+        <CustomTitleBar />           {/* ← Should be visible */}
+
+        <div className="app-content" style={{ paddingTop: '42 px' }}>
+          <Header />
+          <Workspace />
+        </div>
       </div>
     );
   }

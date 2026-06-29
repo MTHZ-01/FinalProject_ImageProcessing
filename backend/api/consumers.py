@@ -1,28 +1,19 @@
+# api/consumers.py
+import json
 import traceback
 import numpy as np
-from PIL import Image
+import base64
 from io import BytesIO
+from PIL import Image
+from scipy import ndimage
 
-from django.http import HttpResponse, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from channels.generic.websocket import AsyncWebsocketConsumer
 
 
-# ==========================================
-# FILTER FUNCTIONS
-# ==========================================
+# ====================== FILTER FUNCTIONS ======================
 
 def convolve(image, kernel):
-    kh, kw = kernel.shape
-    pad_h = kh // 2
-    pad_w = kw // 2
-    padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='reflect')
-    output = np.zeros_like(image, dtype=np.float64)
-    
-    for y in range(image.shape[0]):
-        for x in range(image.shape[1]):
-            region = padded[y:y+kh, x:x+kw]
-            output[y, x] = np.sum(region * kernel)
-    return np.clip(output, 0, 255).astype(np.uint8)
+    return ndimage.convolve(image, kernel, mode='reflect', cval=0.0).clip(0, 255).astype(np.uint8)
 
 
 def average_filter(image, size=3, **kwargs):
@@ -131,10 +122,6 @@ def highboost_filter(image, A=1.5, **kwargs):
     return np.clip(result, 0, 255).astype(np.uint8)
 
 
-# ==========================================
-# ALGORITHM MAP
-# ==========================================
-
 ALGORITHM_MAP = {
     'average': average_filter,
     'weighted_average': weighted_average_filter,
@@ -152,79 +139,53 @@ ALGORITHM_MAP = {
 }
 
 
-# ==========================================
-# VIEWS
-# ==========================================
+# ====================== WEBSOCKET CONSUMER ======================
 
-@csrf_exempt
-def apply_filter_view(request, algorithm):
-    """Main endpoint used by React"""
-    if request.method != 'POST':
-        return JsonResponse({"error": "Only POST requests allowed"}, status=405)
+class ImageProcessingConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        await self.accept()
+        print("WebSocket connected")
 
-    if 'image' not in request.FILES:
-        return JsonResponse({"error": "No image provided"}, status=400)
+    async def disconnect(self, close_code):
+        print("WebSocket disconnected")
 
-    if algorithm not in ALGORITHM_MAP:
-        return JsonResponse({"error": f"Algorithm '{algorithm}' not supported"}, status=404)
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+            algorithm = data['algorithm']
+            params = data.get('params', {})
+            image_base64 = data['image']
 
-    try:
-        file_obj = request.FILES['image']
-        img = Image.open(file_obj).convert('L')
-        img_array = np.array(img)
+            # Decode base64 to image
+            header, encoded = image_base64.split(",", 1)
+            img_data = base64.b64decode(encoded)
+            img = Image.open(BytesIO(img_data)).convert('L')
+            img_array = np.array(img)
 
-        kwargs = {}
-        if 'size' in request.GET:
-            kwargs['size'] = int(request.GET.get('size'))
-        if 'sigma' in request.GET:
-            kwargs['sigma'] = float(request.GET.get('sigma'))
-        if 'A' in request.GET:
-            kwargs['A'] = float(request.GET.get('A'))
-        if 'mask' in request.GET:
-            kwargs['mask'] = request.GET.get('mask')
-        if 'borderType' in request.GET:
-            kwargs['border'] = request.GET.get('borderType')
+            # Process
+            if algorithm in ALGORITHM_MAP:
+                result_array = ALGORITHM_MAP[algorithm](img_array, **params)
 
-        result_array = ALGORITHM_MAP[algorithm](img_array, **kwargs)
+                # Convert back to base64
+                result_img = Image.fromarray(result_array, mode='L')
+                buffer = BytesIO()
+                result_img.save(buffer, format="PNG")
+                result_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-        result_img = Image.fromarray(result_array, mode='L')
-        buffer = BytesIO()
-        result_img.save(buffer, format="PNG")
-        buffer.seek(0)
+                await self.send(text_data=json.dumps({
+                    'status': 'success',
+                    'image': f'data:image/png;base64,{result_base64}',
+                    'algorithm': algorithm
+                }))
+            else:
+                await self.send(text_data=json.dumps({
+                    'status': 'error',
+                    'message': 'Algorithm not found'
+                }))
 
-        return HttpResponse(buffer.getvalue(), content_type="image/png")
-
-    except Exception as e:
-        traceback.print_exc()
-        return JsonResponse({"error": f"Processing failed: {str(e)}"}, status=500)
-
-
-@csrf_exempt
-def average_images_view(request):
-    """Average multiple images endpoint"""
-    if request.method != 'POST':
-        return JsonResponse({"error": "Only POST requests allowed"}, status=405)
-
-    uploaded_files = request.FILES.getlist('images')
-    
-    if len(uploaded_files) < 2:
-        return JsonResponse({"error": "At least two images required"}, status=400)
-
-    try:
-        images = [np.array(Image.open(f).convert('L')) for f in uploaded_files]
-        base_shape = images[0].shape
-        if any(img.shape != base_shape for img in images):
-            return JsonResponse({"error": "All images must have the same dimensions"}, status=400)
-
-        result_array = np.mean(images, axis=0).astype(np.uint8)
-        result_img = Image.fromarray(result_array, mode='L')
-
-        buffer = BytesIO()
-        result_img.save(buffer, format="PNG")
-        buffer.seek(0)
-
-        return HttpResponse(buffer.getvalue(), content_type="image/png")
-
-    except Exception as e:
-        traceback.print_exc()
-        return JsonResponse({"error": str(e)}, status=500)
+        except Exception as e:
+            traceback.print_exc()
+            await self.send(text_data=json.dumps({
+                'status': 'error',
+                'message': str(e)
+            }))
