@@ -36,8 +36,8 @@ class Workspace extends Component {
       lastScrollY: 0,
     };
 
-    this.pendingResolve = null;
-    this.pendingReject = null;
+    // Keep an active map of callbacks indexed by specific request IDs
+    this.activeCallbacks = new Map();
   }
 
   componentDidMount() {
@@ -59,84 +59,82 @@ class Workspace extends Component {
 
     this.socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      this.setState({ isProcessing: false });
 
-      if (data.status === "success") {
-        if (this.pendingResolve) {
-          this.pendingResolve(data.image);
-          this.pendingResolve = null;
-          this.pendingReject = null;
+      // 1. Direct routing: If it has a requestId, send it straight to the ActionPromptCard
+      if (data.requestId && this.activeCallbacks.has(data.requestId)) {
+        const { resolve, reject } = this.activeCallbacks.get(data.requestId);
+        this.activeCallbacks.delete(data.requestId);
+        this.setState({ isProcessing: false });
+
+        if (data.status === "success") {
+          resolve(data.image);
         } else {
-          this.props.addServerResponse({
-            content: data.image,
-            isResponse: true,
-          });
+          reject(new Error(data.message || "Processing failed"));
         }
-      } else {
+        return;
+      }
+
+      // 2. ABSOLUTELY NO CHAT BUBBLE GENERATION HERE FOR PREVIEWS.
+      // This fallback only handles global, untracked system errors if they happen.
+      this.setState({ isProcessing: false });
+      if (data.status !== "success") {
         this.props.addServerResponse({
           type: "error",
-          content: data.message || "Processing failed",
+          content: data.message || "Critical system execution failure",
         });
-
-        if (this.pendingReject) {
-          this.pendingReject(new Error(data.message));
-          this.pendingReject = null;
-        }
       }
     };
 
     this.socket.onerror = (err) => {
       console.error("WebSocket Error:", err);
       this.setState({ isProcessing: false });
-      if (this.pendingReject) this.pendingReject(err);
+      this.activeCallbacks.forEach(({ reject }) => reject(err));
+      this.activeCallbacks.clear();
     };
 
     this.socket.onclose = () => console.log("WebSocket connection closed");
   };
 
-  // New: Handle final apply (add to chat + set as main)
   handleFinalApply = (resultImage) => {
     if (!resultImage) return;
-
-    // Add to chat feed
     this.props.addServerResponse({
       content: resultImage,
       isResponse: true,
     });
-
-    // Set as Latest Main
     this.props.setMainImage(resultImage);
   };
 
-  // Main handler for both preview and final
   handleExecuteAlgorithm = (algorithm, params, isPreview = true) => {
     return new Promise((resolve, reject) => {
       const { mainImage } = this.props;
       const imageData = this.normalizeImage(mainImage);
 
       if (!imageData) {
-        reject(new Error("No main image available"));
-        return;
+        return reject(new Error("No main image available"));
       }
 
       if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-        reject(new Error("WebSocket is not connected"));
-        return;
+        return reject(new Error("WebSocket is not connected"));
       }
 
-      this.setState({ isProcessing: true });
+      // ONLY set the global workspace loading spinner if it's the FINAL submission
+      if (!isPreview) {
+        this.setState({ isProcessing: true });
+      }
 
-      this.pendingResolve = resolve;
-      this.pendingReject = reject;
+      const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      this.activeCallbacks.set(requestId, { resolve, reject });
 
       try {
         const payload = {
+          requestId: requestId,
           algorithm: algorithm,
           params: {
             size: params.kernelSize,
             sigma: params.sigma,
             A: params.boostFactor,
             mask: params.laplacianMask,
+            gamma: params.gamma,
           },
           image: imageData,
         };
@@ -144,6 +142,7 @@ class Workspace extends Component {
         this.socket.send(JSON.stringify(payload));
       } catch (err) {
         console.error("Error sending WebSocket message:", err);
+        this.activeCallbacks.delete(requestId);
         this.setState({ isProcessing: false });
         reject(err);
       }
@@ -221,9 +220,12 @@ class Workspace extends Component {
           exit={{ opacity: 0, y: -50 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         >
-          <ActionPromptCard 
+          <ActionPromptCard
             onExecute={this.handleExecuteAlgorithm}
             onFinalApply={this.handleFinalApply}
+            mainImage={mainImage}
+            language={language}
+            darkMode={this.props.darkMode}
           />
         </motion.div>
       );
@@ -266,7 +268,7 @@ class Workspace extends Component {
       >
         <motion.div className="chat-image-frame" whileHover={{ scale: 1.025 }} transition={{ duration: 0.3 }}>
           {isLatestMain && (
-            <motion.div 
+            <motion.div
               className="latest-main-label"
               initial={{ opacity: 0, scale: 0.6 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -292,7 +294,7 @@ class Workspace extends Component {
           <Box sx={{ display: "flex", alignItems: "center", mt: 0.5 }}>
             {msg.isResponse ? (
               <Typography sx={{ color: "#90caf9", fontSize: "0.75rem", letterSpacing: 0.5, fontWeight: 600 }}>
-                SUCCESS // COMPLETED
+                {t.successCompleted}
               </Typography>
             ) : (
               <Typography sx={{ color: "#aaaaaa", fontSize: "0.75rem", letterSpacing: 0.5 }}>
@@ -309,17 +311,25 @@ class Workspace extends Component {
     const { messages, language } = this.props;
     const { isProcessing, modalImage, contextMenu, visible } = this.state;
 
+    const t = translations[language] || translations.en;
+
     return (
-      <div 
+      <div
         className={`workspace ${language === "fa" ? "rtl" : ""}`}
         style={{
-          backgroundImage: `url(${BgGif})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          backgroundAttachment: "fixed",
+          position: "relative",
+          height: "100vh",
+          width: "100%",
+          overflow: "hidden",
+          paddingTop: "0",
         }}
       >
+        <div
+          className="workspace-bg"
+          style={{
+            backgroundImage: `url(${BgGif})`,
+          }}
+        />
         <ImageModal
           src={modalImage}
           onClose={() => this.setState({ modalImage: null })}
@@ -331,16 +341,28 @@ class Workspace extends Component {
           anchorReference="anchorPosition"
           anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
         >
-          <MenuItem onClick={this.handleSetMainImage}>Set as Latest Main</MenuItem>
+          <MenuItem onClick={this.handleSetMainImage}>{t.latestMain}</MenuItem>
         </Menu>
 
         <motion.div
           className="chat-feed-container"
-          animate={{ 
+          animate={{
             opacity: visible ? 1 : 0.35,
-            y: visible ? 0 : -30 
+            y: visible ? 0 : -30
           }}
           transition={{ duration: 0.4, ease: "easeOut" }}
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "40px 20px 140px 20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "40px",
+            width: "100%",
+            maxWidth: "800px",
+            marginLeft: "auto",
+            marginRight: "auto",
+          }}
         >
           <AnimatePresence>
             {messages.map(this.renderMessage)}
@@ -350,6 +372,10 @@ class Workspace extends Component {
 
           <div ref={this.feedEndRef} />
         </motion.div>
+
+        <footer className="workspace-footer">
+          {t.footerText}
+        </footer>
       </div>
     );
   }
@@ -358,6 +384,7 @@ class Workspace extends Component {
 const mapStateToProps = (state) => ({
   messages: state.app.messages,
   language: state.app.language,
+  darkMode: state.app.darkMode,
   mainImage: state.app.mainImage,
 });
 

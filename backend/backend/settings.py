@@ -62,9 +62,13 @@ ASGI_APPLICATION = 'backend.asgi.application'
 
 
 # For development (in-memory)
+# settings.py
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        'CONFIG': {
+            "capacity": 10_000_000,
+        },
     },
 }
 

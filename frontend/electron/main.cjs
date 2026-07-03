@@ -7,17 +7,23 @@ function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
         height: 900,
+        minWidth: 900,
+        minHeight: 650,
         frame: false,
         titleBarStyle: 'hidden',
-        
-        transparent: true,
-        backgroundColor: '#00000000',
-        
+        titleBarOverlay: {
+            color: '#111111',
+            symbolColor: '#ffffff',
+            height: 32,
+        },
+        transparent: false,
+        backgroundColor: '#111111',
         hasShadow: true,
         roundedCorners: true,
-        
-        thickFrame: false,
-        
+        thickFrame: true,
+        movable: true,
+        resizable: true,
+        fullscreenable: true,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -27,6 +33,14 @@ function createWindow() {
     });
 
     mainWindow.loadURL("http://localhost:5173");
+
+    mainWindow.on('maximize', () => {
+        mainWindow.webContents.send('window-maximized');
+    });
+
+    mainWindow.on('unmaximize', () => {
+        mainWindow.webContents.send('window-unmaximized');
+    });
 }
 
 app.whenReady().then(createWindow);
@@ -42,3 +56,4 @@ ipcMain.on("window-maximize", () => {
     else mainWindow.maximize();
 });
 ipcMain.on("window-close", () => mainWindow.close());
+ipcMain.handle("window-is-maximized", () => mainWindow.isMaximized());

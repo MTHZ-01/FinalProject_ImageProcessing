@@ -17,10 +17,15 @@ const CustomTitleBar = () => {
         window.electronAPI?.onUnmaximized?.(handleUnmaximized);
 
         // Initial state check
-        window.electronAPI?.isMaximized?.().then(setIsMaximized);
+        window.electronAPI?.isMaximized?.().then((value) => {
+            if (typeof value === 'boolean') {
+                setIsMaximized(value);
+            }
+        });
 
         return () => {
-            // Cleanup listeners if your API supports removal
+            window.electronAPI?.removeMaximizedListener?.(handleMaximized);
+            window.electronAPI?.removeUnmaximizedListener?.(handleUnmaximized);
         };
     }, []);
 
@@ -29,20 +34,21 @@ const CustomTitleBar = () => {
     const close = () => window.electronAPI?.close();
 
     return (
-        <Box className="custom-title-bar">
+        <Box className="custom-title-bar" data-drag-region>
             {/* Left side: Icon + Title */}
-            <Box className="title-section">
+            <Box className="title-section" data-drag-region>
                 <Box className="app-icon" />
                 <Typography className="title-text">Image Processor</Typography>
             </Box>
 
             {/* Right side: Window Controls */}
-            <Box className="window-controls">
+            <Box className="window-controls" data-no-drag>
                 {/* Minimize */}
                 <IconButton
                     onClick={minimize}
                     className="control-btn minimize-btn"
                     aria-label="Minimize"
+                    data-no-drag
                 >
                     <MinimizeIcon />
                 </IconButton>
@@ -52,6 +58,7 @@ const CustomTitleBar = () => {
                     onClick={maximize}
                     className="control-btn maximize-btn"
                     aria-label={isMaximized ? "Restore Down" : "Maximize"}
+                    data-no-drag
                 >
                     {isMaximized ? <FilterNoneIcon /> : <CropSquareIcon />}
                 </IconButton>
@@ -61,6 +68,7 @@ const CustomTitleBar = () => {
                     onClick={close}
                     className="control-btn close-btn"
                     aria-label="Close"
+                    data-no-drag
                 >
                     <CloseIcon />
                 </IconButton>

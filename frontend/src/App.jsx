@@ -21,7 +21,7 @@ class App extends Component {
       <div className="app">
         <CustomTitleBar />           {/* ← Should be visible */}
 
-        <div className="app-content" style={{ paddingTop: '42 px' }}>
+        <div className="app-content" style={{ paddingTop: '42px' }}>
           <Header />
           <Workspace />
         </div>
